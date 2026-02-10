@@ -2,8 +2,7 @@
 from flask import Flask, request, jsonify, render_template
 from calculo import calcular
 
-app = Flask(__name__)
-
+app = Flask(__name__, static_folder='templates/static')
 
 @app.route("/", methods=["GET", "POST"])
 def index():
