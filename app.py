@@ -1,4 +1,5 @@
 # app.py
+# By MGuimaraesN
 from flask import Flask, request, jsonify, render_template
 from calculo import calcular
 

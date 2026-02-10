@@ -1,4 +1,5 @@
 # calculo.py
+# By MGuimaraesN
 from decimal import Decimal, ROUND_HALF_UP
 
 IMPOSTO_PECA = Decimal("0.06")
