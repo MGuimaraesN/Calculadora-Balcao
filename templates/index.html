@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-br" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>Balcão</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center">
+
+<div class="w-full max-w-md bg-slate-800 rounded-2xl p-6 shadow-xl">
+
+    <h1 class="text-xl font-bold mb-4">💰 Balcão</h1>
+
+    <!-- ALERTA / ERRO -->
+    <div id="alerta"
+         class="hidden mb-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+        <span id="alertaMsg">Erro</span>
+    </div>
+
+    <form method="post" id="form">
+
+        <input name="peca" id="peca" placeholder="Valor da peça"
+            class="w-full p-3 rounded-xl bg-slate-700 mb-3" required>
+
+        <input name="servico" id="servico" placeholder="Mão de obra"
+            class="w-full p-3 rounded-xl bg-slate-700 mb-3" required>
+
+        <select name="forma" id="forma"
+            class="w-full p-3 rounded-xl bg-slate-700 mb-3"
+            onchange="atualizarCampos(); salvarEstado();">
+            <option value="pix">PIX</option>
+            <option value="debito">Débito</option>
+            <option value="credito">Crédito</option>
+        </select>
+
+        <!-- BANDEIRA -->
+        <div id="bandeiraDiv" class="hidden">
+            <select name="bandeira" id="bandeira"
+                class="w-full p-3 rounded-xl bg-slate-700 mb-3"
+                onchange="salvarEstado();">
+                <option value="elo">Elo</option>
+                <option value="visa">Visa / Master</option>
+            </select>
+        </div>
+
+        <!-- PARCELAS -->
+        <div id="parcelasDiv" class="hidden">
+            <select name="parcelas" id="parcelas"
+                class="w-full p-3 rounded-xl bg-slate-700 mb-3"
+                onchange="salvarEstado();">
+                {% for i in range(1,19) %}
+                <option value="{{ i }}">{{ i }}x</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="flex gap-3">
+            <button class="flex-1 bg-blue-600 py-3 rounded-xl font-bold">
+                Calcular
+            </button>
+
+            <button type="button" onclick="limparTudo()"
+                class="flex-1 bg-slate-600 py-3 rounded-xl font-bold">
+                Limpar
+            </button>
+        </div>
+    </form>
+
+    {% if resultado %}
+    <div class="mt-6 border-t border-slate-600 pt-4">
+
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <p class="text-sm opacity-70">Total a cobrar</p>
+                <p class="text-3xl font-bold text-blue-400" id="totalTexto">
+                    R$ {{ "%.2f"|format(resultado.total) }}
+                </p>
+            </div>
+
+            <!-- NOVO: Copiar total -->
+            <button type="button"
+                onclick="copiarTotal()"
+                class="shrink-0 rounded-xl bg-slate-700 px-4 py-2 text-sm font-bold hover:bg-slate-600">
+                Copiar
+            </button>
+        </div>
+
+        <div class="mt-4 text-sm space-y-1 opacity-90">
+            <p>🔧 Mão de obra ajustada:
+                <b>R$ {{ "%.2f"|format(resultado.mao_obra_corrigida) }}</b>
+            </p>
+
+            <p class="pt-2">📑 Impostos:</p>
+            <p>• Peça (6%): <b>R$ {{ "%.2f"|format(resultado.imposto_peca) }}</b></p>
+            <p>• Serviço (8%): <b>R$ {{ "%.2f"|format(resultado.imposto_servico) }}</b></p>
+
+            <p class="pt-2">💳 Taxa da máquina:
+                <b>R$ {{ "%.2f"|format(resultado.taxa_maquina) }}</b>
+            </p>
+
+            <p class="pt-2">📈 Acréscimo total:
+                <b>R$ {{ "%.2f"|format(resultado.acrescimo) }}</b>
+            </p>
+
+            {% if resultado.parcelas %}
+            <p class="pt-2">
+                {{ resultado.parcelas }}x de
+                <b>R$ {{ "%.2f"|format(resultado.valor_parcela) }}</b>
+            </p>
+            {% endif %}
+        </div>
+
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+function atualizarCampos() {
+    const forma = document.getElementById("forma").value;
+
+    document.getElementById("bandeiraDiv").classList.add("hidden");
+    document.getElementById("parcelasDiv").classList.add("hidden");
+
+    if (forma === "debito") {
+        document.getElementById("bandeiraDiv").classList.remove("hidden");
+    }
+
+    if (forma === "credito") {
+        document.getElementById("bandeiraDiv").classList.remove("hidden");
+        document.getElementById("parcelasDiv").classList.remove("hidden");
+    }
+}
+
+function limparTudo() {
+    // Mantém seu padrão: reset via reload no backend
+    window.location.href = "/";
+}
+
+/* ===========================
+   NOVO: alertas pequenos
+=========================== */
+function showAlert(msg) {
+    const box = document.getElementById("alerta");
+    const t = document.getElementById("alertaMsg");
+    t.textContent = msg;
+    box.classList.remove("hidden");
+    setTimeout(() => box.classList.add("hidden"), 3500);
+}
+
+/* ===========================
+   NOVO: formatação BRL
+   - aceita 1.234,56 / 1234.56 / 1234,56
+   - exibe como 1234,56 (sem "R$")
+=========================== */
+function normalizeMoneyInput(value) {
+    if (!value) return "";
+    let v = String(value).trim();
+
+    // remove tudo que não seja dígito, ponto, vírgula
+    v = v.replace(/[^\d.,]/g, "");
+
+    // se tem vírgula e ponto, assume ponto = milhar e vírgula = decimal
+    if (v.includes(",") && v.includes(".")) {
+        v = v.replace(/\./g, "").replace(",", ".");
+    } else {
+        // se só tem vírgula, vírgula vira decimal
+        v = v.replace(",", ".");
+    }
+
+    // mantém só 2 casas
+    const num = Number(v);
+    if (Number.isNaN(num)) return "";
+
+    // retorna com vírgula e 2 casas
+    return num.toFixed(2).replace(".", ",");
+}
+
+function bindMoneyMask(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("blur", () => {
+        el.value = normalizeMoneyInput(el.value);
+        salvarEstado();
+    });
+    el.addEventListener("input", () => salvarEstado());
+}
+
+/* ===========================
+   NOVO: salvar/restaurar estado
+=========================== */
+const KEY_STATE = "balcao_state_v1";
+const KEY_HIST = "balcao_hist_v1";
+
+function salvarEstado() {
+    try {
+        const state = {
+            peca: document.getElementById("peca").value,
+            servico: document.getElementById("servico").value,
+            forma: document.getElementById("forma").value,
+            bandeira: document.getElementById("bandeira")?.value || "elo",
+            parcelas: document.getElementById("parcelas")?.value || "1"
+        };
+        localStorage.setItem(KEY_STATE, JSON.stringify(state));
+    } catch(e) {}
+}
+
+function restaurarEstado() {
+    try {
+        const raw = localStorage.getItem(KEY_STATE);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+
+        if (s.peca != null) document.getElementById("peca").value = s.peca;
+        if (s.servico != null) document.getElementById("servico").value = s.servico;
+        if (s.forma) document.getElementById("forma").value = s.forma;
+
+        atualizarCampos();
+
+        const bandeiraEl = document.getElementById("bandeira");
+        if (bandeiraEl && s.bandeira) bandeiraEl.value = s.bandeira;
+
+        const parcelasEl = document.getElementById("parcelas");
+        if (parcelasEl && s.parcelas) parcelasEl.value = s.parcelas;
+    } catch(e) {}
+}
+
+/* ===========================
+   NOVO: validação leve antes do submit
+   (sem quebrar seu backend)
+=========================== */
+document.getElementById("form").addEventListener("submit", (e) => {
+    const forma = document.getElementById("forma").value;
+    if (forma === "credito") {
+        const parcelas = document.getElementById("parcelas")?.value;
+        if (!parcelas) {
+            e.preventDefault();
+            showAlert("Selecione o número de parcelas no crédito.");
+            return;
+        }
+    }
+    salvarEstado();
+});
+
+/* ===========================
+   NOVO: copiar total
+=========================== */
+async function copiarTotal() {
+    const el = document.getElementById("totalTexto");
+    if (!el) return showAlert("Nada para copiar.");
+    const txt = el.textContent.trim();
+
+    try {
+        await navigator.clipboard.writeText(txt);
+        showAlert("Total copiado ✅");
+    } catch(e) {
+        // fallback
+        const ta = document.createElement("textarea");
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        showAlert("Total copiado ✅");
+    }
+}
+
+function usarItem(item) {
+    document.getElementById("peca").value = item.peca || "";
+    document.getElementById("servico").value = item.servico || "";
+    document.getElementById("forma").value = item.forma || "pix";
+    atualizarCampos();
+    const bandeiraEl = document.getElementById("bandeira");
+    if (bandeiraEl) bandeiraEl.value = item.bandeira || "elo";
+    const parcelasEl = document.getElementById("parcelas");
+    if (parcelasEl) parcelasEl.value = item.parcelas || "1";
+    salvarEstado();
+    showAlert("Valores restaurados ✅");
+}
+
+function fmtBRL(v) {
+    try {
+        return Number(v).toFixed(2).replace(".", ",");
+    } catch(e) {
+        return v;
+    }
+}
+
+
+/* ===========================
+   INIT
+=========================== */
+bindMoneyMask("peca");
+bindMoneyMask("servico");
+restaurarEstado();
+atualizarCampos();
+</script>
+
+</body>
+</html>
